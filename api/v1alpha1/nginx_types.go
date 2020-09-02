@@ -28,14 +28,18 @@ type NginxSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Nginx. Edit Nginx_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// Replicas is the size of the deployment
+	Replicas int32  `json:"replicas"`
+	Image    string `json:"image"`
 }
 
 // NginxStatus defines the observed state of Nginx
 type NginxStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	Health string `json:"health"`
 }
 
 // +kubebuilder:object:root=true
