@@ -1,4 +1,0 @@
-## Append samples you want in your CSV to this file as resources ##
-resources:
-- mklug.at_v1alpha1_nginx.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples
