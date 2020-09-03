@@ -39,7 +39,7 @@ type NginxSpec struct {
 
 	// +kubebuilder:validation:Optional
 
-	// IngressHost is the hostname the ingress will be bound to
+	// Ingress is the definition needed if a ingress resource should be created
 	Ingress IngressSpec `json:"ingress"`
 }
 

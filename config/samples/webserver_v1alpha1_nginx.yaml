@@ -5,4 +5,7 @@ metadata:
 spec:
   # Add fields here
   replicas: 3
-  image:
+  image: sadomasupilami/ba2-test:v1
+  ingress:
+    enabled: false
+    hostname: "ba2-kubebuilder.cloud.mklug.at"
