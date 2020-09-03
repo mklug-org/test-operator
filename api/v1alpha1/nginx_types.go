@@ -43,6 +43,7 @@ type NginxSpec struct {
 	Ingress IngressSpec `json:"ingress"`
 }
 
+// IngressSpec describes the desired state of the ingress resource
 type IngressSpec struct {
 	// Enabled controls whether an ingress resource is created
 	Enabled bool `json:"enabled"`
@@ -56,13 +57,16 @@ type NginxStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Updating shows whether the webserver is currently updating
 	Updating bool `json:"updating"`
 }
 
+// Nginx is the Schema for the nginxes API
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-
-// Nginx is the Schema for the nginxes API
+// +kubebuilder:printcolumn:name="Replicas",type=integer,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Hostname",type=string,JSONPath=`.spec.ingress.hostname`
+// +kubebuilder:printcolumn:name="Updating",type=boolean,JSONPath=`.status.updating`
 type Nginx struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

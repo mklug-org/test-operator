@@ -8,6 +8,16 @@ metadata:
   creationTimestamp: null
   name: nginxes.webserver.mklug.at
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.replicas
+    name: Replicas
+    type: integer
+  - JSONPath: .spec.ingress.hostname
+    name: Hostname
+    type: string
+  - JSONPath: .status.updating
+    name: Updating
+    type: boolean
   group: webserver.mklug.at
   names:
     kind: Nginx
@@ -40,7 +50,8 @@ spec:
               description: Image is the image that will be deployed
               type: string
             ingress:
-              description: IngressHost is the hostname the ingress will be bound to
+              description: Ingress is the definition needed if a ingress resource
+                should be created
               properties:
                 enabled:
                   description: Enabled controls whether an ingress resource is created
@@ -67,6 +78,7 @@ spec:
           description: NginxStatus defines the observed state of Nginx
           properties:
             updating:
+              description: Updating shows whether the webserver is currently updating
               type: boolean
           required:
           - updating
