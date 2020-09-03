@@ -15,9 +15,9 @@ spec:
   - JSONPath: .spec.ingress.hostname
     name: Hostname
     type: string
-  - JSONPath: .status.updating
-    name: Updating
-    type: boolean
+  - JSONPath: .status.health
+    name: Health
+    type: string
   group: webserver.mklug.at
   names:
     kind: Nginx
@@ -77,11 +77,11 @@ spec:
         status:
           description: NginxStatus defines the observed state of Nginx
           properties:
-            updating:
+            health:
               description: Updating shows whether the webserver is currently updating
-              type: boolean
+              type: string
           required:
-          - updating
+          - health
           type: object
       type: object
   version: v1alpha1

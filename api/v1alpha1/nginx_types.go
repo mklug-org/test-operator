@@ -57,7 +57,7 @@ type NginxStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Updating shows whether the webserver is currently updating
-	Updating bool `json:"updating"`
+	Health string `json:"health"`
 }
 
 // Nginx is the Schema for the nginxes API
@@ -65,7 +65,7 @@ type NginxStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Replicas",type=integer,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Hostname",type=string,JSONPath=`.spec.ingress.hostname`
-// +kubebuilder:printcolumn:name="Updating",type=boolean,JSONPath=`.status.updating`
+// +kubebuilder:printcolumn:name="Health",type=string,JSONPath=`.status.health`
 type Nginx struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

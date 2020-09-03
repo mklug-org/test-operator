@@ -18,9 +18,13 @@ package controllers
 
 import (
 	"context"
-
+	"fmt"
 	"github.com/go-logr/logr"
+	apps "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -36,12 +40,107 @@ type NginxReconciler struct {
 
 // +kubebuilder:rbac:groups=webserver.mklug.at,resources=nginxes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=webserver.mklug.at,resources=nginxes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 
 func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("nginx", req.NamespacedName)
+	ctx := context.Background()
+	logger := r.Log.WithValues("nginx", req.NamespacedName)
 
-	// your logic here
+	logger.Info("Reconciling")
+
+	var nginx webserverv1alpha1.Nginx
+	if err := r.Get(ctx, req.NamespacedName, &nginx); err != nil {
+		// in case of an delete request the nginx might not be found and than we can do nothing and just return a
+		// successful reconciliation (all created objects are automatically garbage collected).
+		// Else the error is returned
+		logger.Error(err, "Nginx not found")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	deployment := &apps.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+	}
+
+	// The CreateOrUpdate methode allows to either create a new resource or update it, preserving changes which are
+	// not controlled by us. Downside is that we are not able to log the differences found.
+	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, deployment, func() error {
+
+		// Selector is immutable but as we should be the only one creating this resource no need to check
+		deployment.Spec.Selector = &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"nginx": req.Name,
+			},
+		}
+
+		deployment.Spec.Replicas = nginx.Spec.Replicas
+		deployment.Spec.Template = corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{
+					"nginx": req.Name,
+				},
+			},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "nginx",
+						Image: nginx.Spec.Image,
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "http",
+								ContainerPort: 80,
+								Protocol:      "TCP",
+							},
+						},
+					},
+				},
+			},
+		}
+		logger.Info(fmt.Sprintf("successfully reconciled deployment %s", req.Name))
+
+		return nil
+	}); err != nil {
+		logger.Error(err, "Deployment reconciliation failed")
+		return ctrl.Result{}, err
+	}
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+	}
+
+	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, service, func() error {
+		service.Spec.Ports = []corev1.ServicePort{
+			{
+				Name: "http",
+				Port: 80,
+				TargetPort: intstr.IntOrString{
+					StrVal: "http",
+				},
+			},
+		}
+		service.Spec.Selector = map[string]string{
+			"nginx": req.Name,
+		}
+		logger.Info(fmt.Sprintf("successfully reconciled service %s", req.Name))
+
+		return nil
+	}); err != nil {
+		logger.Error(err, "Service reconciliation failed")
+		return ctrl.Result{}, err
+	}
+
+	nginx.Status.Health = "Green"
+	err := r.Status().Update(ctx, &nginx)
+	if err != nil {
+		logger.Error(err, "Status update failed")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -49,5 +148,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 func (r *NginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&webserverv1alpha1.Nginx{}).
+		Owns(&apps.Deployment{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
