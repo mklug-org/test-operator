@@ -4,4 +4,5 @@ metadata:
   name: nginx-sample
 spec:
   # Add fields here
-  foo: bar
+  replicas: 3
+  image:

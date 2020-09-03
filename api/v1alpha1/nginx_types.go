@@ -29,9 +29,26 @@ type NginxSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// +kubebuilder:validation:Minimum=1
-	// Replicas is the size of the deployment
-	Replicas int32  `json:"replicas"`
-	Image    string `json:"image"`
+
+	// Replicas is the size of the deployment.
+	// The pointer is necessary to allow a real 0 value
+	Replicas *int32 `json:"replicas"`
+
+	// Image is the image that will be deployed
+	Image string `json:"image"`
+
+	// +kubebuilder:validation:Optional
+
+	// IngressHost is the hostname the ingress will be bound to
+	Ingress IngressSpec `json:"ingress"`
+}
+
+type IngressSpec struct {
+	// Enabled controls whether an ingress resource is created
+	Enabled bool `json:"enabled"`
+
+	// Hostname is the hostname the ingress will be bound to if enabled
+	Hostname string `json:"hostname"`
 }
 
 // NginxStatus defines the observed state of Nginx
@@ -39,7 +56,7 @@ type NginxStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Health string `json:"health"`
+	Updating bool `json:"updating"`
 }
 
 // +kubebuilder:object:root=true

@@ -37,9 +37,25 @@ spec:
           description: NginxSpec defines the desired state of Nginx
           properties:
             image:
+              description: Image is the image that will be deployed
               type: string
+            ingress:
+              description: IngressHost is the hostname the ingress will be bound to
+              properties:
+                enabled:
+                  description: Enabled controls whether an ingress resource is created
+                  type: boolean
+                hostname:
+                  description: Hostname is the hostname the ingress will be bound
+                    to if enabled
+                  type: string
+              required:
+              - enabled
+              - hostname
+              type: object
             replicas:
-              description: Replicas is the size of the deployment
+              description: Replicas is the size of the deployment. The pointer is
+                necessary to allow a real 0 value
               format: int32
               minimum: 1
               type: integer
@@ -50,10 +66,10 @@ spec:
         status:
           description: NginxStatus defines the observed state of Nginx
           properties:
-            health:
-              type: string
+            updating:
+              type: boolean
           required:
-          - health
+          - updating
           type: object
       type: object
   version: v1alpha1
