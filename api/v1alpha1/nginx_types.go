@@ -28,7 +28,7 @@ type NginxSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Minimum=0
 
 	// Replicas is the size of the deployment.
 	// The pointer is necessary to allow a real 0 value

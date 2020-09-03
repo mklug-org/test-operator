@@ -68,7 +68,7 @@ spec:
               description: Replicas is the size of the deployment. The pointer is
                 necessary to allow a real 0 value
               format: int32
-              minimum: 1
+              minimum: 0
               type: integer
           required:
           - image
