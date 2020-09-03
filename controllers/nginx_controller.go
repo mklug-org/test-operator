@@ -44,6 +44,7 @@ type NginxReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 
 func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	var err error
 	ctx := context.Background()
 	logger := r.Log.WithValues("nginx", req.NamespacedName)
 
@@ -52,10 +53,15 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var nginx webserverv1alpha1.Nginx
 	if err := r.Get(ctx, req.NamespacedName, &nginx); err != nil {
 		// in case of an delete request the nginx might not be found and than we can do nothing and just return a
-		// successful reconciliation (all created objects are automatically garbage collected).
+		// successful reconciliation (all created objects are automatically garbage collected (owner references)).
 		// Else the error is returned
-		logger.Error(err, "Nginx not found")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if client.IgnoreNotFound(err) == nil {
+			logger.Info("delete request, ignoring as garbage collection deletes objects")
+			return ctrl.Result{}, nil
+		}
+
+		logger.Error(err, "unable to load nginx")
+		return ctrl.Result{}, err
 	}
 
 	deployment := &apps.Deployment{
@@ -69,6 +75,12 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// not controlled by us. Downside is that we are not able to log the differences found.
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, deployment, func() error {
 
+		//err = ctrl.SetControllerReference(&nginx, deployment, r.Scheme)
+		//if err != nil {
+		//	logger.Error(err, "Setting Controller reference failed")
+		//	return err
+		//}
+
 		// Selector is immutable but as we should be the only one creating this resource no need to check
 		deployment.Spec.Selector = &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -81,6 +93,14 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					"nginx": req.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: nginx.APIVersion,
+						Kind:       nginx.Kind,
+						Name:       nginx.Name,
+						UID:        nginx.UID,
+					},
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -115,6 +135,22 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, service, func() error {
+
+		//err = ctrl.SetControllerReference(&nginx, service, r.Scheme)
+		//if err != nil {
+		//	logger.Error(err, "Setting Controller reference failed")
+		//	return err
+		//}
+
+		service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: nginx.APIVersion,
+				Kind:       nginx.Kind,
+				Name:       nginx.Name,
+				UID:        nginx.UID,
+			},
+		}
+
 		service.Spec.Ports = []corev1.ServicePort{
 			{
 				Name: "http",
@@ -136,7 +172,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	nginx.Status.Health = "Green"
-	err := r.Status().Update(ctx, &nginx)
+	err = r.Status().Update(ctx, &nginx)
 	if err != nil {
 		logger.Error(err, "Status update failed")
 		return ctrl.Result{}, err
