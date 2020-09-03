@@ -9,4 +9,3 @@ spec:
   ingress:
     enabled: false
     hostname: "ba2-kubebuilder.cloud.mklug.at"
-    sepp: hans
