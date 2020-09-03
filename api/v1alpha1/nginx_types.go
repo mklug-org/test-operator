@@ -37,9 +37,8 @@ type NginxSpec struct {
 	// Image is the image that will be deployed
 	Image string `json:"image"`
 
-	// +kubebuilder:validation:Optional
-
 	// Ingress is the definition needed if a ingress resource should be created
+	// +optional
 	Ingress IngressSpec `json:"ingress"`
 }
 
