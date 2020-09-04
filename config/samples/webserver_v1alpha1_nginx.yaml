@@ -6,7 +6,7 @@ spec:
   # Add fields here
   replicas: 3
   image: nginx
-  message: sepp ist toll
+  message: "<h1>I am operator</h1>"
   ingress:
     enabled: false
     hostname: "ba2-kubebuilder.cloud.mklug.at"
