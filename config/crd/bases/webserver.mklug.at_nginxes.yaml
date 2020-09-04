@@ -64,6 +64,9 @@ spec:
               - enabled
               - hostname
               type: object
+            message:
+              description: Message is the text to show in the html page
+              type: string
             replicas:
               description: Replicas is the size of the deployment. The pointer is
                 necessary to allow a real 0 value
@@ -72,6 +75,7 @@ spec:
               type: integer
           required:
           - image
+          - message
           - replicas
           type: object
         status:

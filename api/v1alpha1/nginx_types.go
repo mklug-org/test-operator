@@ -37,6 +37,9 @@ type NginxSpec struct {
 	// Image is the image that will be deployed
 	Image string `json:"image"`
 
+	// Message is the text to show in the html page
+	Message string `json:"message"`
+
 	// Ingress is the definition needed if a ingress resource should be created
 	// +optional
 	Ingress IngressSpec `json:"ingress"`
