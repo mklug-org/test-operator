@@ -180,15 +180,14 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	logger.Info(fmt.Sprintf("successfully reconciled service %s", service.ObjectMeta.Name))
 
-	// disabling afterwards will nor work
-	if nginx.Spec.Ingress.Enabled {
+	ingress := &networking.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+	}
 
-		ingress := &networking.Ingress{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      req.Name,
-				Namespace: req.Namespace,
-			},
-		}
+	if nginx.Spec.Ingress.Enabled {
 
 		if _, err := ctrl.CreateOrUpdate(ctx, r.Client, ingress, func() error {
 
@@ -223,13 +222,28 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if apierrors.IsConflict(err) {
 				// After updating the resource the Reconcile function kicks in and it could get an older cached version,
 				// should this be the case just requeue
-				logger.Info("Service has been changed, requeuing")
+				logger.Info("Ingress has been changed, requeuing")
 				return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 			}
 			logger.Error(err, "Ingress reconciliation failed")
 			return ctrl.Result{}, err
 		}
 		logger.Info(fmt.Sprintf("successfully reconciled ingress %s", ingress.ObjectMeta.Name))
+	} else {
+		err = r.Get(ctx, req.NamespacedName, ingress)
+		if err != nil {
+			if client.IgnoreNotFound(err) == nil {
+				logger.Info("Ingress is disabled and is not present, nothing to do")
+			} else {
+				return ctrl.Result{}, err
+			}
+		} else {
+			logger.Info("Ingress is disabled and present, will be deleted")
+			err = r.Delete(ctx, ingress)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	nginx.Status.Health = "Green"
