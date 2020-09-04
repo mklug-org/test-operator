@@ -55,6 +55,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	logger.Info("Reconciling")
 
+	// NGINX CRD
 	var nginx webserverv1alpha1.Nginx
 	if err := r.Get(ctx, req.NamespacedName, &nginx); err != nil {
 		// in case of an delete request the nginx might not be found and than we can do nothing and just return a
@@ -69,6 +70,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// DEPLOYMENT
 	deployment := &apps.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
@@ -93,6 +95,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	logger.Info(fmt.Sprintf("successfully reconciled deployment %s", deployment.ObjectMeta.Name))
 
+	// SERVICE
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
@@ -105,8 +108,6 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return setService(service, nginx, deployment, req)
 	}); err != nil {
 		if apierrors.IsConflict(err) {
-			// After updating the resource the Reconcile function kicks in and it could get an older cached version,
-			// should this be the case just requeue
 			logger.Info("Service has been changed, requeuing")
 			return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 		}
@@ -115,6 +116,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	logger.Info(fmt.Sprintf("successfully reconciled service %s", service.ObjectMeta.Name))
 
+	// INGRESS
 	ingress := &networking.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
@@ -129,8 +131,6 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return setIngress(ingress, nginx, req, service)
 		}); err != nil {
 			if apierrors.IsConflict(err) {
-				// After updating the resource the Reconcile function kicks in and it could get an older cached version,
-				// should this be the case just requeue
 				logger.Info("Ingress has been changed, requeuing")
 				return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 			}
@@ -155,14 +155,22 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	nginx.Status.Health = "Green"
-	err = r.Status().Update(ctx, &nginx)
+	err = updateNginxStatus("Green", &nginx, r, ctx, logger)
 	if err != nil {
-		logger.Error(err, "Status update failed")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func updateNginxStatus(status string, nginx *webserverv1alpha1.Nginx, r *NginxReconciler, ctx context.Context, logger logr.Logger) error {
+	nginx.Status.Health = status
+	err := r.Status().Update(ctx, nginx)
+	if err != nil {
+		logger.Error(err, "Status update failed")
+		return err
+	}
+	return nil
 }
 
 func setIngress(ingress *networking.Ingress, nginx webserverv1alpha1.Nginx, req ctrl.Request, service *corev1.Service) error {
