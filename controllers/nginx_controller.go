@@ -106,6 +106,11 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					{
 						Name:  "nginx",
 						Image: nginx.Spec.Image,
+						Args: []string{
+							"sh",
+							"-c",
+							fmt.Sprintf("echo '%s' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'", nginx.Spec.Ingress.Hostname),
+						},
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "http",
