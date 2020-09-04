@@ -8,5 +8,5 @@ spec:
   image: nginx
   message: "<h1>I am operator</h1>"
   ingress:
-    enabled: false
+    enabled: true
     hostname: "ba2-kubebuilder.cloud.mklug.at"

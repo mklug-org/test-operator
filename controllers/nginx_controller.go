@@ -61,7 +61,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// successful reconciliation (all created objects are automatically garbage collected (owner references)).
 		// Else the error is returned
 		if client.IgnoreNotFound(err) == nil {
-			logger.Info("delete request, ignoring as garbage collection deletes objects")
+			logger.Info("delete request, ignoring as garbage collection deletes child resources")
 			return ctrl.Result{}, nil
 		}
 
@@ -79,50 +79,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// The CreateOrUpdate methode allows to either create a new resource or update it, preserving changes which are
 	// not controlled by us. Downside is that we are not able to log the differences found.
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, deployment, func() error {
-
-		// Selector is immutable but as we should be the only one creating this resource no need to check
-		deployment.Spec.Selector = &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"nginx": req.Name,
-			},
-		}
-
-		deployment.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion: nginx.APIVersion,
-				Kind:       nginx.Kind,
-				Name:       nginx.Name,
-				UID:        nginx.UID,
-			},
-		}
-		deployment.Spec.Replicas = nginx.Spec.Replicas
-		deployment.Spec.Template = corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					"nginx": req.Name,
-				},
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Name:  "nginx",
-						Image: nginx.Spec.Image,
-						Args: []string{
-							"sh",
-							"-c",
-							fmt.Sprintf("echo '%s' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'", nginx.Spec.Message),
-						},
-						Ports: []corev1.ContainerPort{
-							{
-								Name:          "http",
-								ContainerPort: 80,
-								Protocol:      "TCP",
-							},
-						},
-					},
-				},
-			},
-		}
+		setDeployment(deployment, req, nginx)
 		return nil
 	}); err != nil {
 		// After updating the resource the Reconcile function kicks in and it could get an older cached version,
@@ -145,29 +102,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, service, func() error {
 
-		service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				APIVersion: nginx.APIVersion,
-				Kind:       nginx.Kind,
-				Name:       nginx.Name,
-				UID:        nginx.UID,
-			},
-		}
-
-		service.Spec.Ports = []corev1.ServicePort{
-			{
-				Name: deployment.Spec.Template.Spec.Containers[0].Name,
-				Port: 80,
-				TargetPort: intstr.IntOrString{
-					StrVal: deployment.Spec.Template.Spec.Containers[0].Name,
-				},
-			},
-		}
-		service.Spec.Selector = map[string]string{
-			"nginx": req.Name,
-		}
-
-		return nil
+		return setService(service, nginx, deployment, req)
 	}); err != nil {
 		if apierrors.IsConflict(err) {
 			// After updating the resource the Reconcile function kicks in and it could get an older cached version,
@@ -191,33 +126,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		if _, err := ctrl.CreateOrUpdate(ctx, r.Client, ingress, func() error {
 
-			ingress.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-				{
-					APIVersion: nginx.APIVersion,
-					Kind:       nginx.Kind,
-					Name:       nginx.Name,
-					UID:        nginx.UID,
-				},
-			}
-
-			ingress.Spec.Rules = []networking.IngressRule{
-				{
-					Host: nginx.Spec.Ingress.Hostname,
-					IngressRuleValue: networking.IngressRuleValue{
-						HTTP: &networking.HTTPIngressRuleValue{
-							Paths: []networking.HTTPIngressPath{
-								{
-									Backend: networking.IngressBackend{
-										ServiceName: req.Name,
-										ServicePort: service.Spec.Ports[0].TargetPort,
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-			return nil
+			return setIngress(ingress, nginx, req, service)
 		}); err != nil {
 			if apierrors.IsConflict(err) {
 				// After updating the resource the Reconcile function kicks in and it could get an older cached version,
@@ -254,6 +163,108 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func setIngress(ingress *networking.Ingress, nginx webserverv1alpha1.Nginx, req ctrl.Request, service *corev1.Service) error {
+	ingress.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: nginx.APIVersion,
+			Kind:       nginx.Kind,
+			Name:       nginx.Name,
+			UID:        nginx.UID,
+		},
+	}
+
+	ingress.Spec.Rules = []networking.IngressRule{
+		{
+			Host: nginx.Spec.Ingress.Hostname,
+			IngressRuleValue: networking.IngressRuleValue{
+				HTTP: &networking.HTTPIngressRuleValue{
+					Paths: []networking.HTTPIngressPath{
+						{
+							Backend: networking.IngressBackend{
+								ServiceName: req.Name,
+								ServicePort: service.Spec.Ports[0].TargetPort,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return nil
+}
+
+func setService(service *corev1.Service, nginx webserverv1alpha1.Nginx, deployment *apps.Deployment, req ctrl.Request) error {
+	service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: nginx.APIVersion,
+			Kind:       nginx.Kind,
+			Name:       nginx.Name,
+			UID:        nginx.UID,
+		},
+	}
+
+	service.Spec.Ports = []corev1.ServicePort{
+		{
+			Name: deployment.Spec.Template.Spec.Containers[0].Name,
+			Port: 80,
+			TargetPort: intstr.IntOrString{
+				StrVal: deployment.Spec.Template.Spec.Containers[0].Name,
+			},
+		},
+	}
+	service.Spec.Selector = map[string]string{
+		"nginx": req.Name,
+	}
+
+	return nil
+}
+
+func setDeployment(deployment *apps.Deployment, req ctrl.Request, nginx webserverv1alpha1.Nginx) {
+	// Selector is immutable but as we should be the only one creating this resource no need to check
+	deployment.Spec.Selector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"nginx": req.Name,
+		},
+	}
+
+	deployment.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: nginx.APIVersion,
+			Kind:       nginx.Kind,
+			Name:       nginx.Name,
+			UID:        nginx.UID,
+		},
+	}
+	deployment.Spec.Replicas = nginx.Spec.Replicas
+	deployment.Spec.Template = corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"nginx": req.Name,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: nginx.Spec.Image,
+					Args: []string{
+						"sh",
+						"-c",
+						fmt.Sprintf("echo '%s' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'", nginx.Spec.Message),
+					},
+					Ports: []corev1.ContainerPort{
+						{
+							Name:          "http",
+							ContainerPort: 80,
+							Protocol:      "TCP",
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func (r *NginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
