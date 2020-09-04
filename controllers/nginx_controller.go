@@ -70,12 +70,24 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// Metadata to be used in all created resources, the OwnerReferences exist to allow garbage collection
+	// when the CRD is deleted
+	objectMeta := metav1.ObjectMeta{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: nginx.APIVersion,
+				Kind:       nginx.Kind,
+				Name:       nginx.Name,
+				UID:        nginx.UID,
+			},
+		},
+	}
+
 	// DEPLOYMENT
 	deployment := &apps.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		},
+		ObjectMeta: objectMeta,
 	}
 
 	// The CreateOrUpdate methode allows to either create a new resource or update it, preserving changes which are
@@ -97,10 +109,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// SERVICE
 	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		},
+		ObjectMeta: objectMeta,
 	}
 
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, service, func() error {
@@ -118,10 +127,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// INGRESS
 	ingress := &networking.Ingress{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		},
+		ObjectMeta: objectMeta,
 	}
 
 	if nginx.Spec.Ingress.Enabled {
@@ -174,14 +180,14 @@ func updateNginxStatus(status string, nginx *webserverv1alpha1.Nginx, r *NginxRe
 }
 
 func setIngress(ingress *networking.Ingress, nginx webserverv1alpha1.Nginx, req ctrl.Request, service *corev1.Service) error {
-	ingress.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-		{
-			APIVersion: nginx.APIVersion,
-			Kind:       nginx.Kind,
-			Name:       nginx.Name,
-			UID:        nginx.UID,
-		},
-	}
+	//ingress.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+	//	{
+	//		APIVersion: nginx.APIVersion,
+	//		Kind:       nginx.Kind,
+	//		Name:       nginx.Name,
+	//		UID:        nginx.UID,
+	//	},
+	//}
 
 	ingress.Spec.Rules = []networking.IngressRule{
 		{
@@ -204,14 +210,14 @@ func setIngress(ingress *networking.Ingress, nginx webserverv1alpha1.Nginx, req 
 }
 
 func setService(service *corev1.Service, nginx webserverv1alpha1.Nginx, deployment *apps.Deployment, req ctrl.Request) error {
-	service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-		{
-			APIVersion: nginx.APIVersion,
-			Kind:       nginx.Kind,
-			Name:       nginx.Name,
-			UID:        nginx.UID,
-		},
-	}
+	//service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+	//	{
+	//		APIVersion: nginx.APIVersion,
+	//		Kind:       nginx.Kind,
+	//		Name:       nginx.Name,
+	//		UID:        nginx.UID,
+	//	},
+	//}
 
 	service.Spec.Ports = []corev1.ServicePort{
 		{
@@ -237,14 +243,15 @@ func setDeployment(deployment *apps.Deployment, req ctrl.Request, nginx webserve
 		},
 	}
 
-	deployment.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-		{
-			APIVersion: nginx.APIVersion,
-			Kind:       nginx.Kind,
-			Name:       nginx.Name,
-			UID:        nginx.UID,
-		},
-	}
+	//deployment.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+	//	{
+	//		APIVersion: nginx.APIVersion,
+	//		Kind:       nginx.Kind,
+	//		Name:       nginx.Name,
+	//		UID:        nginx.UID,
+	//	},
+	//}
+
 	deployment.Spec.Replicas = nginx.Spec.Replicas
 	deployment.Spec.Template = corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
