@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networking "k8s.io/api/networking/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -116,8 +117,6 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				},
 			},
 		}
-		logger.Info(fmt.Sprintf("successfully reconciled deployment %s", req.Name))
-
 		return nil
 	}); err != nil {
 		// After updating the resource the Reconcile function kicks in and it could get an older cached version,
@@ -129,6 +128,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		logger.Info("Deployment reconciliation failed")
 		return ctrl.Result{}, err
 	}
+	logger.Info(fmt.Sprintf("successfully reconciled deployment %s", deployment.ObjectMeta.Name))
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -150,17 +150,16 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		service.Spec.Ports = []corev1.ServicePort{
 			{
-				Name: "http",
+				Name: deployment.Spec.Template.Spec.Containers[0].Name,
 				Port: 80,
 				TargetPort: intstr.IntOrString{
-					StrVal: "http",
+					StrVal: deployment.Spec.Template.Spec.Containers[0].Name,
 				},
 			},
 		}
 		service.Spec.Selector = map[string]string{
 			"nginx": req.Name,
 		}
-		logger.Info(fmt.Sprintf("successfully reconciled service %s", req.Name))
 
 		return nil
 	}); err != nil {
@@ -173,6 +172,55 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		logger.Error(err, "Service reconciliation failed")
 		return ctrl.Result{}, err
 	}
+	logger.Info(fmt.Sprintf("successfully reconciled service %s", service.ObjectMeta.Name))
+
+	ingress := &networking.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+	}
+
+	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, ingress, func() error {
+
+		ingress.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: nginx.APIVersion,
+				Kind:       nginx.Kind,
+				Name:       nginx.Name,
+				UID:        nginx.UID,
+			},
+		}
+
+		ingress.Spec.Rules = []networking.IngressRule{
+			{
+				Host: nginx.Spec.Ingress.Hostname,
+				IngressRuleValue: networking.IngressRuleValue{
+					HTTP: &networking.HTTPIngressRuleValue{
+						Paths: []networking.HTTPIngressPath{
+							{
+								Backend: networking.IngressBackend{
+									ServiceName: req.Name,
+									ServicePort: service.Spec.Ports[0].TargetPort,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		return nil
+	}); err != nil {
+		if apierrors.IsConflict(err) {
+			// After updating the resource the Reconcile function kicks in and it could get an older cached version,
+			// should this be the case just requeue
+			logger.Info("Service has been changed, requeuing")
+			return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
+		}
+		logger.Error(err, "Ingress reconciliation failed")
+		return ctrl.Result{}, err
+	}
+	logger.Info(fmt.Sprintf("successfully reconciled ingress %s", ingress.ObjectMeta.Name))
 
 	nginx.Status.Health = "Green"
 	err = r.Status().Update(ctx, &nginx)
