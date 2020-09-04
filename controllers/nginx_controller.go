@@ -22,11 +22,13 @@ import (
 	"github.com/go-logr/logr"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"time"
 
 	webserverv1alpha1 "github.com/mklug-org/test-operator/api/v1alpha1"
 )
@@ -42,6 +44,7 @@ type NginxReconciler struct {
 // +kubebuilder:rbac:groups=webserver.mklug.at,resources=nginxes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
+// +kubebuilder:rbac:groups=,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var err error
@@ -75,12 +78,6 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// not controlled by us. Downside is that we are not able to log the differences found.
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, deployment, func() error {
 
-		//err = ctrl.SetControllerReference(&nginx, deployment, r.Scheme)
-		//if err != nil {
-		//	logger.Error(err, "Setting Controller reference failed")
-		//	return err
-		//}
-
 		// Selector is immutable but as we should be the only one creating this resource no need to check
 		deployment.Spec.Selector = &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -88,19 +85,19 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			},
 		}
 
+		deployment.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: nginx.APIVersion,
+				Kind:       nginx.Kind,
+				Name:       nginx.Name,
+				UID:        nginx.UID,
+			},
+		}
 		deployment.Spec.Replicas = nginx.Spec.Replicas
 		deployment.Spec.Template = corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{
 					"nginx": req.Name,
-				},
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: nginx.APIVersion,
-						Kind:       nginx.Kind,
-						Name:       nginx.Name,
-						UID:        nginx.UID,
-					},
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -123,7 +120,13 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		return nil
 	}); err != nil {
-		logger.Error(err, "Deployment reconciliation failed")
+		// After updating the resource the Reconcile function kicks in and it could get an older cached version,
+		// should this be the case just requeue
+		if apierrors.IsConflict(err) {
+			logger.Info("Deployment has been changed, requeuing")
+			return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
+		}
+		logger.Info("Deployment reconciliation failed")
 		return ctrl.Result{}, err
 	}
 
@@ -135,12 +138,6 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	if _, err := ctrl.CreateOrUpdate(ctx, r.Client, service, func() error {
-
-		//err = ctrl.SetControllerReference(&nginx, service, r.Scheme)
-		//if err != nil {
-		//	logger.Error(err, "Setting Controller reference failed")
-		//	return err
-		//}
 
 		service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
 			{
@@ -167,6 +164,12 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		return nil
 	}); err != nil {
+		if apierrors.IsConflict(err) {
+			// After updating the resource the Reconcile function kicks in and it could get an older cached version,
+			// should this be the case just requeue
+			logger.Info("Service has been changed, requeuing")
+			return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
+		}
 		logger.Error(err, "Service reconciliation failed")
 		return ctrl.Result{}, err
 	}
