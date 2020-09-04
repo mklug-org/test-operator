@@ -66,7 +66,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return ctrl.Result{}, nil
 		}
 
-		logger.Error(err, "unable to load nginx")
+		logger.Info("unable to load nginx")
 		return ctrl.Result{}, err
 	}
 
@@ -120,7 +120,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			logger.Info("Service has been changed, requeuing")
 			return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 		}
-		logger.Error(err, "Service reconciliation failed")
+		logger.Info("Service reconciliation failed")
 		return ctrl.Result{}, err
 	}
 	logger.Info(fmt.Sprintf("successfully reconciled service %s", service.ObjectMeta.Name))
@@ -140,7 +140,7 @@ func (r *NginxReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				logger.Info("Ingress has been changed, requeuing")
 				return ctrl.Result{RequeueAfter: 100 * time.Millisecond}, nil
 			}
-			logger.Error(err, "Ingress reconciliation failed")
+			logger.Info("Ingress reconciliation failed")
 			return ctrl.Result{}, err
 		}
 		logger.Info(fmt.Sprintf("successfully reconciled ingress %s", ingress.ObjectMeta.Name))
@@ -173,7 +173,7 @@ func updateNginxStatus(status string, nginx *webserverv1alpha1.Nginx, r *NginxRe
 	nginx.Status.Health = status
 	err := r.Status().Update(ctx, nginx)
 	if err != nil {
-		logger.Error(err, "Status update failed")
+		logger.Info("Status update failed")
 		return err
 	}
 	return nil
