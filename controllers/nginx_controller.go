@@ -180,14 +180,6 @@ func updateNginxStatus(status string, nginx *webserverv1alpha1.Nginx, r *NginxRe
 }
 
 func setIngress(ingress *networking.Ingress, nginx webserverv1alpha1.Nginx, req ctrl.Request, service *corev1.Service) error {
-	//ingress.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-	//	{
-	//		APIVersion: nginx.APIVersion,
-	//		Kind:       nginx.Kind,
-	//		Name:       nginx.Name,
-	//		UID:        nginx.UID,
-	//	},
-	//}
 
 	ingress.Spec.Rules = []networking.IngressRule{
 		{
@@ -210,14 +202,6 @@ func setIngress(ingress *networking.Ingress, nginx webserverv1alpha1.Nginx, req 
 }
 
 func setService(service *corev1.Service, nginx webserverv1alpha1.Nginx, deployment *apps.Deployment, req ctrl.Request) error {
-	//service.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-	//	{
-	//		APIVersion: nginx.APIVersion,
-	//		Kind:       nginx.Kind,
-	//		Name:       nginx.Name,
-	//		UID:        nginx.UID,
-	//	},
-	//}
 
 	service.Spec.Ports = []corev1.ServicePort{
 		{
@@ -242,15 +226,6 @@ func setDeployment(deployment *apps.Deployment, req ctrl.Request, nginx webserve
 			"nginx": req.Name,
 		},
 	}
-
-	//deployment.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-	//	{
-	//		APIVersion: nginx.APIVersion,
-	//		Kind:       nginx.Kind,
-	//		Name:       nginx.Name,
-	//		UID:        nginx.UID,
-	//	},
-	//}
 
 	deployment.Spec.Replicas = nginx.Spec.Replicas
 	deployment.Spec.Template = corev1.PodTemplateSpec{
