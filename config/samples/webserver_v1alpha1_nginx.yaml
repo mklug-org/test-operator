@@ -3,7 +3,6 @@ kind: Nginx
 metadata:
   name: nginx-sample
 spec:
-  # Add fields here
   replicas: 3
   image: nginx
   message: "<h1>I am operator</h1>"
